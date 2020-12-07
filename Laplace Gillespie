@@ -1,0 +1,112 @@
+
+#Algoritmo de Laplace Gillespie de Masuda 2018
+Simula<-function(alpha,beta,mu,InfInic,PobTotal,M1){
+  tiempos=c(0)
+  TotInfectados=c(InfInic)
+  TotRecuperados=c(0)
+  TotSanos=c(PobTotal-TotInfectados)
+  Estados=sample(c(rep(1,TotSanos),rep(2,TotInfectados)),PobTotal)
+  contador=0
+  Enlaces=as.matrix(as_adj(M1))
+  Remover=0
+  Agregar=0
+  TipoMov=0
+  Terminado=0
+  while(TotInfectados[length(TotInfectados)]!=0)
+  {
+    #Si se descomenta esta parte se grafica la red
+    #if(contador%%10==0)
+    #{
+      #set.seed(1)
+      #      jpeg(file=paste0("plot",contador,".jpeg"))
+      #plot(M1, vertex.label='',vertex.color=ifelse(Estados==1,"blue",ifelse(Estados==2,"red","green")),vertex.size=10)
+      #      legend("topright", c("Suceptibles","Infectados","Recuperados"), pch = 19, pt.bg = "white", col = c("blue","red","green"))
+      #      dev.off()
+      #set.seed(NULL)
+    #}
+    #Sano se decodifica con 1, Infectado con 2 y recuperado con 3
+    if(contador==0){
+      Infectados=(1:length(Estados))[Estados==2]
+      TasAux<-c()
+      for(i in 1:length(Infectados)){
+        TasAux<-c(TasAux,Muestrea(alpha,beta)) #Se generan las tasas de acuerdo al Poisson modulado por eventos
+      }
+      M=matrix(c(TasAux,rep(mu,length(Infectados))),nrow=length(Infectados))
+    }
+    
+    
+    if(TipoMov==3){
+      Estados[Remover]=3
+      
+      UbicacionRemover<-Infectados==Remover
+      if(sum(UbicacionRemover)>0)
+      {
+        Infectados<-Infectados[!UbicacionRemover]
+        M=M[!UbicacionRemover,]
+        M=matrix(M,nrow=length(Infectados))
+      } 
+      
+      if(sum(M)==0){
+          Terminado=1
+        }
+    }
+    
+    if(TipoMov==2){
+      if(Agregar!=0){
+        Estados[Agregar]=2
+        M[EstadoMov,1]=Muestrea(alpha,beta)
+        M=rbind(M,c(Muestrea(alpha,beta),mu))
+        Infectados=c(Infectados,Agregar)
+      }
+      
+      if(Agregar==0)
+        M[EstadoMov,1]=Muestrea(alpha,beta)
+    }
+    
+    contador=contador+1 #Particularmente util para la grafica de la red
+    
+    if(Terminado!=1){
+    dt=rexp(1,sum(M))
+    
+    TasaElegida<-sample(1:length(M),1,prob=as.vector(M))
+    
+    if(TasaElegida<=nrow(M)){
+      EstadoMov=TasaElegida
+      TipoMov=2
+    }else{
+      EstadoMov=TasaElegida-nrow(M) 
+      TipoMov=3
+    }
+    
+    if(TipoMov==3){
+      Remover=Infectados[EstadoMov]
+      
+      
+    }else{
+      Candidato=sample(1:length(Estados),1,prob=Enlaces[EstadoMov,])    
+      if (Estados[Candidato]==1)
+      {
+        Agregar=Candidato
+      } else{
+        Agregar=0
+        }
+    }
+    }
+    
+    
+    
+    TotSanos=c(TotSanos,sum(Estados==1))
+    TotInfectados=c(TotInfectados,sum(Estados==2))
+    TotRecuperados=c(TotRecuperados,sum(Estados==3))
+    tiempos=c(tiempos,tiempos[length(tiempos)]+dt)
+  }
+  TotSanos=c(TotSanos,sum(Estados==1))
+  TotInfectados=c(TotInfectados,sum(Estados==2))
+  TotRecuperados=c(TotRecuperados,sum(Estados==3))
+  tiempos=c(tiempos,tiempos[length(tiempos)]+dt)
+  # set.seed(1)
+  # plot(M1, vertex.label='',vertex.color=ifelse(Estados==1,"blue",ifelse(Estados==2,"red","green")),vertex.size=10)
+  # set.seed(NULL)
+  SIR=data.frame("Ocurrencias"=tiempos,"Suceptibles"=TotSanos,"Infectados"=TotInfectados,"Recuperados"=TotRecuperados)  
+  SIR=cbind(SIR[1:nrow(SIR)-1,1],SIR[2:nrow(SIR),2:4])
+}
