@@ -1,0 +1,63 @@
+
+#Muestrador de la funcion de densidad proporcional a 1/(x(x-1)^(alpha)) de la columna p(\lambda)
+#de la tabla 1 de Masuda 2018
+Muestrea<-function(alpha,beta){
+#Definimos la funcion de densidad
+pl=function(x) {
+  1/(gamma(alpha)*gamma(1-alpha))* (1/(x*(beta*x-1)^alpha))*(x>1/beta)
+}
+
+#Nuestra densidad propuesta
+fprop<-function(x) (1/(beta*x-1)^(1+alpha))*(beta^(alpha+1)*alpha)
+
+#Simulacion de nuestra densidad propuesta
+Generaprop<-function(){
+  1/runif(1)^(1/alpha)+1/beta
+}
+  #integrate(fprop,1/beta+1,100000)$value
+
+#Probabilidad de que la v.a. de la que queremos simular este entre 1/beta,1/beta+1
+pInt<-integrate(pl,1/beta,1/(beta)+1)$value
+
+Intervalo<-runif(1)
+
+#Usamos transformada inversa en el intervalo 1/beta,1/beta+1
+if(Intervalo<pInt){
+u=runif(1,0,pInt)
+invertir=function(x){
+  (integrate(pl,1/beta,x)[1]$value-u)^2
+}
+muestra<-optimize(invertir,c(1/beta,1/beta+1))$minimum
+muestra
+
+} else { #Aceptacion y rechazo del intervalo 1/beta+1 a inf
+  aceptado=0
+  while(aceptado==0){
+    prop<-Generaprop()
+      if(runif(1)<beta-1/prop){
+        aceptado=1
+        muestra<-prop 
+        }
+  }
+}
+muestra
+}
+
+
+pl=function(x) {
+  1/(gamma(alpha)*gamma(1-alpha))* (1/(x*(beta*x-1)^alpha))*(x>1/beta)
+}
+
+Muestra<-c()
+for(i in 1:1000)
+Muestra<-c(Muestra,Muestrea(alpha,beta))
+(table(Muestra))
+
+hist(Muestra,prob=T,breaks=200)
+lines(1:300,pl(1:300))
+
+
+
+
+
+
