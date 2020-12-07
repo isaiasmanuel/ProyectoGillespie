@@ -1,0 +1,161 @@
+#Dada una matriz de tiempos transcurridos calcula el \delta t
+Simuladt<-function(TiempRenovacion,alpha,beta,mu){
+  #Calculo de la funcion phi definida en la eq. (4) de Masuda 2018
+    Phi<-function(x){
+    a<-prod(1-pgamma(TiempRenovacion[,1]+x,alpha,beta))/prod(1-pgamma(TiempRenovacion[,1],alpha,beta))
+    b<-prod(1-pexp(TiempRenovacion[,2]+x,mu))/prod(1-pexp(TiempRenovacion[,2],mu))
+    a*b
+  }
+  
+  uniformeTiempo<-runif(1)
+  
+  #Funcion a optimizar para encontrar la inversa de phi
+  Invertir<-function(x){
+    abs(Phi(x)-uniformeTiempo)
+  }
+  
+  #optimize(Invertir,lower=0,upper=4)$minimum
+  options(warn=-1)
+  #Simulacion de dt
+  optim(0.01,Invertir)$par
+}
+
+#Muestrea que evento ocurrio a partir de las tasas instantaneas de ocurrencia
+Eligetasa<-function(TiempRenovacion,dt,alpha,beta,mu){
+  MatrizTasas<-TiempRenovacion+dt
+  #Calculo de la ecuacion (5) de Masuda 2018
+  MatrizTasas<-cbind(dgamma(MatrizTasas[,1],alpha,beta)/(1-pgamma(MatrizTasas[,1],alpha,beta)),dexp(MatrizTasas[,2],mu)/(1-pexp(MatrizTasas[,2],mu)))
+  TasaElegida<-sample(1:length(MatrizTasas),1,prob=as.vector(MatrizTasas))
+  TasaElegida
+}
+
+
+#Simulacion del modelo SIR
+Simula<-function(alpha,beta,mu,InfInic,PobTotal,M1){
+  #Inicializacion de variables
+  tiempos=c(0)
+  TotInfectados=c(InfInic)
+  TotRecuperados=c(0)
+  TotSanos=c(PobTotal-TotInfectados)
+  Estados=sample(c(rep(1,TotSanos),rep(2,TotInfectados)),PobTotal)
+  contador=0
+  Enlaces=as.matrix(as_adj(M1))
+  Remover=0
+  Agregar=0
+  TipoMov=0
+  Terminado=0
+  while(TotInfectados[length(TotInfectados)]!=0 )
+  {
+   #Al descomentar esta seccion se guardan las redes cada cierto numero de iteraciones 
+    # if(contador%%10==0)
+    #{
+    #set.seed(1)
+    #      jpeg(file=paste0("plot",contador,".jpeg"))
+    #plot(M1, vertex.label='',vertex.color=ifelse(Estados==1,"blue",ifelse(Estados==2,"red","green")),vertex.size=10)
+    #      legend("topright", c("Suceptibles","Infectados","Recuperados"), pch = 19, pt.bg = "white", col = c("blue","red","green"))
+    #      dev.off()
+    #set.seed(NULL)
+    #}
+    
+    if(contador==0){
+      #El estado vale 1 si esta sano, 2 si esta infectado y 3 si esta recuperado
+      Infectados=(1:length(Estados))[Estados==2]
+      TiempRenovacion<-matrix(rep(0,2*length(Infectados)),nrow=length(Infectados))
+      dt=Simuladt(TiempRenovacion,alpha,beta,mu)
+      TasaElegida<-Eligetasa(TiempRenovacion,dt,alpha,beta,mu)
+      
+    }
+    
+    if(TipoMov==3){
+      Estados[Remover]=3
+      
+      UbicacionRemover<-Infectados==Remover
+      if(sum(UbicacionRemover)>0)
+      {
+        Infectados<-Infectados[!UbicacionRemover]
+        TiempRenovacion=TiempRenovacion[!UbicacionRemover,]+dt
+        TiempRenovacion=matrix(TiempRenovacion,nrow=length(Infectados))
+        if(sum(TiempRenovacion)==0){dt=0}
+        
+        
+        if(sum(TiempRenovacion)!=0){      
+          dt=Simuladt(TiempRenovacion,alpha,beta,mu)
+          TasaElegida<-Eligetasa(TiempRenovacion,dt,alpha,beta,mu)
+        }
+      } 
+      
+      if(sum(TiempRenovacion)==0){
+        Terminado=1
+      }
+      
+    }
+    
+    if(TipoMov==2){
+      if(Agregar!=0){
+        Estados[Agregar]=2
+        TiempRenovacion=TiempRenovacion+dt
+        #TiempRenovacion[EstadoMov,1]=0
+        TiempRenovacion[EstadoMov,]=0
+        TiempRenovacion=rbind(TiempRenovacion,c(0,0))
+        Infectados=c(Infectados,Agregar)
+        
+        dt=Simuladt(TiempRenovacion,alpha,beta,mu)
+        TasaElegida<-Eligetasa(TiempRenovacion,dt,alpha,beta,mu)
+      }
+      
+      if(Agregar==0){
+        TiempRenovacion=TiempRenovacion+dt
+        #TiempRenovacion[EstadoMov,1]=0
+        TiempRenovacion[EstadoMov,]=0
+        dt=Simuladt(TiempRenovacion,alpha,beta,mu)
+        TasaElegida<-Eligetasa(TiempRenovacion,dt,alpha,beta,mu)
+      }
+    }
+    
+    
+    
+    contador=contador+1
+    
+    if(Terminado!=1){
+      
+      
+      if(TasaElegida<=nrow(TiempRenovacion)){
+        EstadoMov=TasaElegida
+        TipoMov=2
+      }else{
+        EstadoMov=TasaElegida-nrow(TiempRenovacion) 
+        TipoMov=3
+      }
+      
+      if(TipoMov==3){
+        Remover=Infectados[EstadoMov]
+        
+        
+      }else{
+        Candidato=sample(1:length(Estados),1,prob=Enlaces[EstadoMov,])    
+        if (Estados[Candidato]==1)
+        {
+          Agregar=Candidato
+        } else{
+          Agregar=0
+        }
+      }
+    }
+    
+    TotSanos=c(TotSanos,sum(Estados==1))
+    TotInfectados=c(TotInfectados,sum(Estados==2))
+    TotRecuperados=c(TotRecuperados,sum(Estados==3))
+    tiempos=c(tiempos,tiempos[length(tiempos)]+dt)
+    
+  }
+  TotSanos=c(TotSanos,sum(Estados==1))
+  TotInfectados=c(TotInfectados,sum(Estados==2))
+  TotRecuperados=c(TotRecuperados,sum(Estados==3))
+  tiempos=c(tiempos,tiempos[length(tiempos)]+dt)
+  # set.seed(1)
+  # plot(M1, vertex.label='',vertex.color=ifelse(Estados==1,"blue",ifelse(Estados==2,"red","green")),vertex.size=10)
+  # set.seed(NULL)
+  SIR=data.frame("Ocurrencias"=tiempos,"Suceptibles"=TotSanos,"Infectados"=TotInfectados,"Recuperados"=TotRecuperados)  
+  SIR=cbind(SIR[1:nrow(SIR)-1,1],SIR[2:nrow(SIR),2:4])
+}
+
